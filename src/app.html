@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>Home</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Roboto, Arial, "Noto Sans Arabic", "Geeza Pro", sans-serif; color: #f5efe4; -webkit-font-smoothing: antialiased; cursor: none; }
+  .ar { font-family: "Noto Naskh Arabic", "Noto Sans Arabic", "Geeza Pro", "Segoe UI", Tahoma, sans-serif; direction: rtl; }
+
+  /* 1920x1080 stage, scaled to whatever the browser viewport is */
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; }
+  #bg { position: absolute; inset: 0; left: 0; top: 0; right: 0; bottom: 0; transition: background 2s; }
+  #pattern { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; opacity: .07; }
+  #vignette { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%); }
+  #content { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transition: transform 3s ease, opacity 2s; }
+  #dim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: #000; opacity: 0; transition: opacity 3s; pointer-events: none; }
+
+  /* top bar */
+  .top { position: absolute; left: 120px; right: 120px; top: 90px; display: flex; justify-content: space-between; align-items: flex-start; }
+  #clock { font-size: 210px; font-weight: 200; line-height: .9; letter-spacing: -4px; font-variant-numeric: tabular-nums; }
+  #clock .sec { font-size: 64px; font-weight: 300; letter-spacing: 0; opacity: .55; margin-left: 14px; }
+  #clock .ampm { font-size: 54px; font-weight: 400; letter-spacing: 1px; opacity: .7; margin-left: 10px; }
+  #dates { margin-top: 26px; font-size: 38px; font-weight: 300; opacity: .9; }
+  #hijri { text-align: left; margin-top: 8px; font-size: 40px; color: var(--accent); }
+  #place { margin-top: 14px; font-size: 26px; letter-spacing: 4px; text-transform: uppercase; opacity: .5; }
+
+  #weather { text-align: right; margin-top: 18px; }
+  #weather .temp { font-size: 110px; font-weight: 200; line-height: 1; }
+  #weather .desc { font-size: 32px; opacity: .85; margin-top: 10px; }
+  #weather .range { font-size: 28px; opacity: .55; margin-top: 6px; }
+
+  /* next prayer hero */
+  #hero { position: absolute; left: 120px; right: 120px; top: 520px; display: flex; align-items: flex-end; justify-content: space-between; }
+  #hero .label { font-size: 30px; letter-spacing: 6px; text-transform: uppercase; opacity: .6; }
+  #hero .name { font-size: 88px; font-weight: 300; margin-top: 6px; }
+  #hero .name .ar { font-size: 80px; margin-left: 28px; color: var(--accent); }
+  #hero .count { font-size: 120px; font-weight: 200; font-variant-numeric: tabular-nums; letter-spacing: -2px; line-height: 1; text-align: right; }
+  #hero .countlbl { font-size: 28px; opacity: .55; text-align: right; margin-top: 8px; }
+  #progress { position: absolute; left: 120px; right: 120px; top: 760px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); overflow: hidden; }
+  #progress div { height: 100%; width: 0; background: var(--accent); border-radius: 3px; transition: width 1s linear; }
+
+  /* prayer strip — always visible */
+  #strip { position: absolute; left: 120px; right: 120px; bottom: 80px; display: flex; }
+  .pc { flex: 1; margin: 0 10px; padding: 26px 0 24px; text-align: center; border-radius: 22px; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.07); transition: all .6s; }
+  .pc:first-child { margin-left: 0; } .pc:last-child { margin-right: 0; }
+  .pc .en { font-size: 30px; letter-spacing: 2px; opacity: .75; }
+  .pc .arn { font-size: 34px; margin-top: 4px; opacity: .75; }
+  .pc .t { font-size: 58px; font-weight: 300; margin-top: 10px; font-variant-numeric: tabular-nums; }
+  .pc.past { opacity: .4; }
+  .pc.sun { background: rgba(255,255,255,.03); }
+  .pc.sun .t { font-size: 50px; }
+  .pc.next { background: var(--accent); border-color: var(--accent); color: var(--onaccent); transform: translateY(-14px); box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+  .pc.next .en, .pc.next .arn { opacity: 1; }
+  .pc.current { border-color: var(--accent); }
+
+  /* adhan overlay */
+  #adhan { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,.72); text-align: center; }
+  #adhan.on { display: flex; }
+  #adhan .a1 { font-size: 40px; letter-spacing: 8px; text-transform: uppercase; opacity: .7; }
+  #adhan .a2 { font-size: 150px; margin: 20px 0 10px; color: var(--accent); }
+  #adhan .a3 { font-size: 60px; font-weight: 300; }
+  #adhan .a4 { font-size: 28px; opacity: .5; margin-top: 50px; }
+
+  /* settings */
+  #settings { position: absolute; right: 0; top: 0; bottom: 0; width: 820px; background: rgba(12,12,14,.94); display: none; padding: 70px 70px; box-sizing: border-box; }
+  #settings.on { display: block; }
+  #settings h2 { margin: 0 0 8px; font-size: 52px; font-weight: 300; }
+  #settings .hint { font-size: 24px; opacity: .5; margin-bottom: 30px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 15px 26px; margin: 4px 0; border-radius: 14px; font-size: 30px; border: 2px solid transparent; }
+  .row .v { opacity: .85; }
+  .row .v:before { content: "‹  "; opacity: 0; } .row .v:after { content: "  ›"; opacity: 0; }
+  .row.f { background: rgba(255,255,255,.1); border-color: var(--accent); }
+  .row.f .v:before, .row.f .v:after { opacity: .7; }
+  #rows { max-height: 860px; overflow: hidden; }
+
+  #toast { position: absolute; left: 50%; bottom: 330px; transform: translateX(-50%); background: rgba(0,0,0,.6); padding: 14px 30px; border-radius: 40px; font-size: 26px; opacity: 0; transition: opacity .6s; }
+  #toast.on { opacity: .9; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <svg id="pattern" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="star" width="160" height="160" patternUnits="userSpaceOnUse">
+        <g fill="none" stroke="#fff" stroke-width="1.4">
+          <rect x="40" y="40" width="80" height="80"/>
+          <rect x="40" y="40" width="80" height="80" transform="rotate(45 80 80)"/>
+          <circle cx="80" cy="80" r="22"/>
+          <path d="M0 0L40 40M160 0L120 40M0 160L40 120M160 160L120 120"/>
+        </g>
+      </pattern>
+    </defs>
+    <rect width="1920" height="1080" fill="url(#star)"/>
+  </svg>
+  <div id="vignette"></div>
+
+  <div id="content">
+    <div class="top">
+      <div>
+        <div id="clock"></div>
+        <div id="dates"></div>
+        <div id="hijri" class="ar"></div>
+        <div id="place"></div>
+      </div>
+      <div id="weather"></div>
+    </div>
+
+    <div id="hero">
+      <div>
+        <div class="label" id="heroLabel">Next prayer</div>
+        <div class="name"><span id="heroEn"></span><span class="ar" id="heroAr"></span></div>
+      </div>
+      <div>
+        <div class="count" id="heroCount"></div>
+        <div class="countlbl" id="heroAt"></div>
+      </div>
+    </div>
+    <div id="progress"><div id="progbar"></div></div>
+
+    <div id="strip"></div>
+  </div>
+
+  <div id="adhan">
+    <div class="a1" id="adhanLbl">It is time for</div>
+    <div class="a2 ar" id="adhanAr"></div>
+    <div class="a3" id="adhanEn"></div>
+    <div class="a4">Press OK to dismiss</div>
+  </div>
+
+  <div id="dim"></div>
+
+  <div id="settings">
+    <h2>Settings</h2>
+    <div class="hint">▲ ▼ choose · ◀ ▶ change · BACK to close</div>
+    <div id="rows"></div>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<script>
+/*PRAYER*/
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  /* ---------- config ---------- */
+  var CITIES = [
+    { id: 'shj', name: 'Sharjah', lat: 25.3463, lng: 55.4209 },
+    { id: 'dxb', name: 'Dubai', lat: 25.2048, lng: 55.2708 },
+    { id: 'auh', name: 'Abu Dhabi', lat: 24.4539, lng: 54.3773 },
+    { id: 'ajm', name: 'Ajman', lat: 25.4052, lng: 55.5136 },
+    { id: 'aln', name: 'Al Ain', lat: 24.2075, lng: 55.7447 },
+    { id: 'cai', name: 'Cairo', lat: 30.0444, lng: 31.2357 }
+  ];
+  var THEMES = {
+    desert:  { name: 'Desert Night', bg: 'linear-gradient(160deg,#1d1424 0%,#3a2032 45%,#a2553a 100%)', accent: '#f2b66d', on: '#2a1608' },
+    emerald: { name: 'Emerald', bg: 'linear-gradient(160deg,#04171a 0%,#0b3a36 55%,#1f6b52 100%)', accent: '#d9c27a', on: '#0b2a22' },
+    midnight:{ name: 'Midnight', bg: 'linear-gradient(160deg,#05070f 0%,#101a3a 55%,#28407a 100%)', accent: '#8fb8ff', on: '#06122e' },
+    sand:    { name: 'Sand', bg: 'linear-gradient(160deg,#3b2f25 0%,#7d6249 55%,#c9a77c 100%)', accent: '#fff1d6', on: '#3b2a16' },
+    auto:    { name: 'Follow the sky' }
+  };
+  var NAMES = {
+    fajr:   { en: 'Fajr', ar: 'الفجر' },
+    sunrise:{ en: 'Sunrise', ar: 'الشروق' },
+    dhuhr:  { en: 'Dhuhr', ar: 'الظهر' },
+    jumuah: { en: "Jumu'ah", ar: 'الجمعة' },
+    asr:    { en: 'Asr', ar: 'العصر' },
+    maghrib:{ en: 'Maghrib', ar: 'المغرب' },
+    isha:   { en: 'Isha', ar: 'العشاء' }
+  };
+  var ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+  var DEFAULTS = {
+    city: 'shj', method: 'uae', asr: 1, h12: true, theme: 'auto', weather: true,
+    alert: true, chime: true, dim: true, shift: true,
+    off: { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 }
+  };
+  var S = load();
+  function load() {
+    var s = JSON.parse(JSON.stringify(DEFAULTS));
+    try {
+      var raw = window.localStorage && localStorage.getItem('tvhome');
+      if (raw) { var o = JSON.parse(raw); for (var k in o) s[k] = o[k]; }
+    } catch (e) {}
+    return s;
+  }
+  function save() { try { localStorage.setItem('tvhome', JSON.stringify(S)); } catch (e) {} }
+  function city() { for (var i = 0; i < CITIES.length; i++) if (CITIES[i].id === S.city) return CITIES[i]; return CITIES[0]; }
+
+  /* ---------- stage scaling ---------- */
+  function fit() {
+    var sc = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    var st = $('stage');
+    st.style.transform = 'scale(' + sc + ')';
+    st.style.left = ((window.innerWidth - 1920 * sc) / 2) + 'px';
+    st.style.top = ((window.innerHeight - 1080 * sc) / 2) + 'px';
+  }
+  window.addEventListener('resize', fit); fit();
+
+  /* ---------- prayer schedule ---------- */
+  function timesFor(d) {
+    var c = city();
+    return PrayerEngine.compute(d, { lat: c.lat, lng: c.lng, method: S.method, asr: S.asr, offsets: S.off });
+  }
+  function toDate(day, mins) { var d = new Date(day.getFullYear(), day.getMonth(), day.getDate()); d.setMinutes(mins); return d; }
+  function fmt(d) {
+    var h = d.getHours(), m = d.getMinutes();
+    if (!S.h12) return pad(h) + ':' + pad(m);
+    var hh = h % 12; if (hh === 0) hh = 12;
+    return hh + ':' + pad(m);
+  }
+  function ampm(d) { return d.getHours() < 12 ? 'AM' : 'PM'; }
+  function label(key, d) { return (key === 'dhuhr' && d.getDay() === 5) ? NAMES.jumuah : NAMES[key]; }
+
+  // events: today's six + tomorrow's fajr; yesterday's isha for progress before fajr
+  var cache = { key: '', ev: null };
+  function events(now) {
+    var k = now.toDateString() + JSON.stringify(S);
+    if (cache.key === k) return cache.ev;
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var tom = new Date(today.getTime()); tom.setDate(tom.getDate() + 1);
+    var yes = new Date(today.getTime()); yes.setDate(yes.getDate() - 1);
+    var t = timesFor(today), tt = timesFor(tom), ty = timesFor(yes);
+    var ev = { today: [], prevIsha: toDate(yes, ty.isha), nextFajr: toDate(tom, tt.fajr), tomorrow: tom };
+    for (var i = 0; i < ORDER.length; i++) ev.today.push({ key: ORDER[i], at: toDate(today, t[ORDER[i]]) });
+    cache = { key: k, ev: ev };
+    return ev;
+  }
+
+  /* ---------- rendering ---------- */
+  function buildStrip() {
+    var html = '';
+    for (var i = 0; i < ORDER.length; i++) {
+      html += '<div class="pc' + (ORDER[i] === 'sunrise' ? ' sun' : '') + '" id="pc_' + ORDER[i] + '">' +
+        '<div class="en"></div><div class="arn ar"></div><div class="t"></div></div>';
+    }
+    $('strip').innerHTML = html;
+  }
+  buildStrip();
+
+  var lastAdhan = '';
+  function tick() {
+    var now = new Date();
+    var ev = events(now);
+
+    // clock
+    var h = now.getHours(), hh = S.h12 ? (h % 12 || 12) : pad(h);
+    $('clock').innerHTML = hh + ':' + pad(now.getMinutes()) +
+      (S.h12 ? '<span class="ampm">' + ampm(now) + '</span>' : '<span class="sec">' + pad(now.getSeconds()) + '</span>');
+
+    // find next prayer (skip sunrise as a "prayer" for alerts, but show it as next marker)
+    var next = null, prev = null;
+    for (var i = 0; i < ev.today.length; i++) {
+      if (ev.today[i].at > now) { next = ev.today[i]; prev = i > 0 ? ev.today[i - 1] : { key: 'isha', at: ev.prevIsha }; break; }
+    }
+    if (!next) { next = { key: 'fajr', at: ev.nextFajr, tomorrow: true }; prev = ev.today[ev.today.length - 1]; }
+
+    // strip
+    for (var j = 0; j < ev.today.length; j++) {
+      var e = ev.today[j], el = $('pc_' + e.key), nm = label(e.key, e.at);
+      var cls = 'pc' + (e.key === 'sunrise' ? ' sun' : '');
+      if (!next.tomorrow && e.key === next.key) cls += ' next';
+      else if (e.at <= now) cls += (prev && e.key === prev.key && e.key !== 'sunrise') ? ' current' : ' past';
+      if (next.tomorrow && e.key === 'fajr') cls = 'pc next';
+      if (el.className !== cls) el.className = cls;
+      el.children[0].textContent = nm.en;
+      el.children[1].textContent = nm.ar;
+      var shown = (next.tomorrow && e.key === 'fajr') ? next.at : e.at;
+      el.children[2].innerHTML = fmt(shown) + (S.h12 ? '<span style="font-size:26px;opacity:.6;margin-left:6px">' + ampm(shown) + '</span>' : '');
+    }
+
+    // hero
+    var nn = label(next.key, next.at);
+    $('heroLabel').textContent = next.key === 'sunrise' ? 'Sunrise in' : (next.tomorrow ? 'Next prayer · tomorrow' : 'Next prayer');
+    $('heroEn').textContent = nn.en;
+    $('heroAr').textContent = nn.ar;
+    var left = Math.max(0, Math.floor((next.at - now) / 1000));
+    var lh = Math.floor(left / 3600), lm = Math.floor((left % 3600) / 60), ls = left % 60;
+    $('heroCount').textContent = (lh > 0 ? lh + ':' + pad(lm) : lm) + ':' + pad(ls);
+    $('heroAt').textContent = 'at ' + fmt(next.at) + (S.h12 ? ' ' + ampm(next.at) : '');
+    var span = next.at - prev.at, done = now - prev.at;
+    $('progbar').style.width = Math.max(0, Math.min(100, done / span * 100)) + '%';
+
+    // adhan moment: show for 8 minutes after a prayer time
+    var hit = null;
+    for (var a = 0; a < ev.today.length; a++) {
+      var x = ev.today[a];
+      if (x.key !== 'sunrise' && now >= x.at && now - x.at < 8 * 60000) hit = x;
+    }
+    if (S.alert && hit) {
+      var id = hit.key + hit.at.getTime();
+      if (lastAdhan !== id && !dismissed[id]) {
+        lastAdhan = id;
+        var n2 = label(hit.key, hit.at);
+        $('adhanLbl').textContent = 'It is time for';
+        $('adhanAr').textContent = 'حان الآن موعد صلاة ' + n2.ar;
+        $('adhanEn').textContent = n2.en + ' · ' + fmt(hit.at) + (S.h12 ? ' ' + ampm(hit.at) : '');
+        $('adhan').className = 'on';
+        if (S.chime) chime();
+      }
+    } else if ($('adhan').className === 'on' && !hit) {
+      $('adhan').className = '';
+    }
+
+    // night dimming: from 90 min after Isha until 40 min before Fajr
+    var isha = ev.today[5].at, fajr = ev.today[0].at;
+    var night = (now - isha > 90 * 60000) || (fajr - now > 40 * 60000 && now < fajr);
+    $('dim').style.opacity = (S.dim && night && !settingsOpen) ? '0.55' : '0';
+
+    // dates once a minute
+    if (now.getSeconds() === 0 || !$('dates').textContent) drawDates(now);
+    if (S.theme === 'auto') applyTheme(now, ev);
+  }
+
+  var dismissed = {};
+  function drawDates(now) {
+    var g;
+    try { g = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+    catch (e) { g = now.toDateString(); }
+    $('dates').textContent = g;
+    var hj = '';
+    try {
+      hj = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab', { day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+      if (!/[؀-ۿ]/.test(hj)) hj = '';
+    } catch (e) {}
+    $('hijri').textContent = hj;
+    $('hijri').style.display = hj ? '' : 'none';
+    $('place').textContent = city().name;
+  }
+
+  /* ---------- themes ---------- */
+  var currentTheme = '';
+  function applyTheme(now, ev) {
+    var key = S.theme;
+    if (key === 'auto') {
+      var t = ev.today, n = now;
+      if (n < t[0].at || n >= new Date(t[5].at.getTime() + 30 * 60000)) key = 'midnight';
+      else if (n < t[2].at) key = 'emerald';
+      else if (n < t[4].at) key = 'sand';
+      else key = 'desert';
+    }
+    if (key === currentTheme) return;
+    currentTheme = key;
+    var th = THEMES[key];
+    $('bg').style.background = th.bg;
+    var r = document.documentElement.style;
+    r.setProperty('--accent', th.accent);
+    r.setProperty('--onaccent', th.on);
+  }
+
+  /* ---------- weather (Open-Meteo, no key) ---------- */
+  var WX = { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Cloudy', 45: 'Fog', 48: 'Fog', 51: 'Drizzle', 53: 'Drizzle', 55: 'Drizzle',
+    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 80: 'Showers', 81: 'Showers', 82: 'Heavy showers', 95: 'Thunderstorm', 96: 'Thunderstorm', 99: 'Thunderstorm' };
+  function loadWeather() {
+    if (!S.weather) { $('weather').innerHTML = ''; return; }
+    var c = city();
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + c.lat + '&longitude=' + c.lng +
+      '&current=temperature_2m,weather_code,relative_humidity_2m&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1';
+    var x = new XMLHttpRequest();
+    x.open('GET', url, true);
+    x.timeout = 15000;
+    x.onload = function () {
+      try {
+        var d = JSON.parse(x.responseText);
+        $('weather').innerHTML =
+          '<div class="temp">' + Math.round(d.current.temperature_2m) + '°</div>' +
+          '<div class="desc">' + (WX[d.current.weather_code] || '') + ' · ' + d.current.relative_humidity_2m + '% humidity</div>' +
+          '<div class="range">H ' + Math.round(d.daily.temperature_2m_max[0]) + '°  L ' + Math.round(d.daily.temperature_2m_min[0]) + '°</div>';
+      } catch (e) {}
+    };
+    x.send();
+  }
+
+  /* ---------- chime (Web Audio, no files) ---------- */
+  function chime() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      var ctx = new AC(), notes = [659.25, 783.99, 987.77, 1318.5];
+      for (var i = 0; i < notes.length; i++) {
+        var o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + i * 0.45;
+        o.type = 'sine'; o.frequency.value = notes[i];
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+        o.connect(g); g.connect(ctx.destination); o.start(t0); o.stop(t0 + 2.3);
+      }
+    } catch (e) {}
+  }
+
+  /* ---------- burn-in protection: drift a few px every minute ---------- */
+  setInterval(function () {
+    if (!S.shift) { $('content').style.transform = ''; return; }
+    var dx = Math.round(Math.random() * 16 - 8), dy = Math.round(Math.random() * 12 - 6);
+    $('content').style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  }, 60000);
+
+  /* ---------- settings (remote control) ---------- */
+  function cycle(list, cur, dir) { var i = 0; for (var k = 0; k < list.length; k++) if (list[k] === cur) i = k; return list[(i + dir + list.length) % list.length]; }
+  function onoff(v) { return v ? 'On' : 'Off'; }
+  var ROWS = [
+    { n: 'City', v: function () { return city().name; }, c: function (d) { S.city = cycle(CITIES.map(function (x) { return x.id; }), S.city, d); loadWeather(); } },
+    { n: 'Calculation', v: function () { return PrayerEngine.METHODS[S.method].name; }, c: function (d) { S.method = cycle(Object.keys(PrayerEngine.METHODS), S.method, d); } },
+    { n: 'Asr', v: function () { return S.asr === 2 ? 'Hanafi' : 'Standard'; }, c: function () { S.asr = S.asr === 2 ? 1 : 2; } },
+    { n: 'Clock', v: function () { return S.h12 ? '12-hour' : '24-hour'; }, c: function () { S.h12 = !S.h12; } },
+    { n: 'Theme', v: function () { return THEMES[S.theme].name; }, c: function (d) { S.theme = cycle(Object.keys(THEMES), S.theme, d); currentTheme = ''; if (S.theme !== 'auto') applyTheme(new Date(), null); } },
+    { n: 'Adhan alert', v: function () { return onoff(S.alert); }, c: function () { S.alert = !S.alert; } },
+    { n: 'Alert chime', v: function () { return onoff(S.chime); }, c: function () { S.chime = !S.chime; if (S.chime) chime(); } },
+    { n: 'Night dimming', v: function () { return onoff(S.dim); }, c: function () { S.dim = !S.dim; } },
+    { n: 'Weather', v: function () { return onoff(S.weather); }, c: function () { S.weather = !S.weather; loadWeather(); } },
+    { n: 'Screen drift', v: function () { return onoff(S.shift); }, c: function () { S.shift = !S.shift; } }
+  ];
+  for (var oi = 0; oi < ORDER.length; oi++) (function (k) {
+    ROWS.push({ n: NAMES[k].en + ' adjust', v: function () { var o = S.off[k] || 0; return (o > 0 ? '+' : '') + o + ' min'; },
+      c: function (d) { S.off[k] = Math.max(-15, Math.min(15, (S.off[k] || 0) + d)); } });
+  })(ORDER[oi]);
+  ROWS.push({ n: 'Reset all', v: function () { return 'Press OK'; }, c: function () {}, ok: function () { S = JSON.parse(JSON.stringify(DEFAULTS)); currentTheme = ''; loadWeather(); toast('Settings reset'); } });
+
+  var settingsOpen = false, focus = 0, scrollTop = 0;
+  function drawSettings() {
+    var VISIBLE = 11;
+    if (focus < scrollTop) scrollTop = focus;
+    if (focus >= scrollTop + VISIBLE) scrollTop = focus - VISIBLE + 1;
+    var html = '';
+    for (var i = scrollTop; i < Math.min(ROWS.length, scrollTop + VISIBLE); i++) {
+      html += '<div class="row' + (i === focus ? ' f' : '') + '"><span>' + ROWS[i].n + '</span><span class="v">' + ROWS[i].v() + '</span></div>';
+    }
+    $('rows').innerHTML = html;
+  }
+  function openSettings(on) { settingsOpen = on; $('settings').className = on ? 'on' : ''; if (on) drawSettings(); }
+
+  var toastT;
+  function toast(msg) { $('toast').textContent = msg; $('toast').className = 'on'; clearTimeout(toastT); toastT = setTimeout(function () { $('toast').className = ''; }, 2500); }
+
+  var BACK = { 8: 1, 27: 1, 461: 1, 10009: 1, 166: 1 };
+  document.addEventListener('keydown', function (e) {
+    var k = e.keyCode;
+    if ($('adhan').className === 'on' && (k === 13 || BACK[k])) {
+      dismissed[lastAdhan] = true; $('adhan').className = ''; e.preventDefault(); return;
+    }
+    if (!settingsOpen) {
+      if (k === 13 || k === 38 || k === 40) { openSettings(true); e.preventDefault(); }
+      return; // let BACK fall through to VIDAA so it exits the app
+    }
+    e.preventDefault();
+    if (BACK[k]) { openSettings(false); save(); toast('Saved'); return; }
+    if (k === 38) focus = (focus - 1 + ROWS.length) % ROWS.length;
+    else if (k === 40) focus = (focus + 1) % ROWS.length;
+    else if (k === 37 || k === 39) { ROWS[focus].c(k === 39 ? 1 : -1); save(); cache.key = ''; }
+    else if (k === 13) { if (ROWS[focus].ok) ROWS[focus].ok(); else ROWS[focus].c(1); save(); cache.key = ''; }
+    drawSettings(); tick();
+  });
+
+  /* ---------- start ---------- */
+  if (S.theme !== 'auto') applyTheme(new Date(), null);
+  else applyTheme(new Date(), events(new Date()));
+  drawDates(new Date());
+  tick();
+  setInterval(tick, 1000);
+  loadWeather();
+  setInterval(loadWeather, 30 * 60000);
+})();
+</script>
+</body>
+</html>
