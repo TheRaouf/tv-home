@@ -26,6 +26,11 @@
   #hijri { text-align: left; margin-top: 8px; font-size: 40px; color: var(--accent); }
   #place { margin-top: 14px; font-size: 26px; letter-spacing: 4px; text-transform: uppercase; opacity: .5; }
 
+  #welcome { text-align: right; }
+  #welcome .w1 { font-size: 24px; letter-spacing: 8px; text-transform: uppercase; opacity: .55; }
+  #welcome .w2 { font-size: 64px; font-weight: 300; margin-top: 6px; font-style: italic; letter-spacing: 1px; }
+  #welcome .w3 { font-size: 40px; color: var(--accent); margin-top: 2px; direction: rtl; }
+  #welcome .rule { width: 90px; height: 2px; background: var(--accent); opacity: .7; margin: 22px 0 0 auto; }
   #weather { text-align: right; margin-top: 18px; }
   #weather .temp { font-size: 110px; font-weight: 200; line-height: 1; }
   #weather .desc { font-size: 32px; opacity: .85; margin-top: 10px; }
@@ -105,7 +110,7 @@
         <div id="hijri" class="ar"></div>
         <div id="place"></div>
       </div>
-      <div id="weather"></div>
+      <div><div id="welcome"></div><div id="weather"></div></div>
     </div>
 
     <div id="hero">
@@ -127,7 +132,7 @@
     <div class="a1" id="adhanLbl">It is time for</div>
     <div class="a2 ar" id="adhanAr"></div>
     <div class="a3" id="adhanEn"></div>
-    <div class="a4">Press OK to dismiss</div>
+    <div class="a4" id="adhanHint">Press OK to dismiss</div>
   </div>
 
   <div id="dim"></div>
@@ -139,6 +144,7 @@
   </div>
   <div id="toast"></div>
 </div>
+<audio id="adhanAudio" preload="none"></audio>
 
 <script>
 /*PRAYER*/
@@ -174,10 +180,30 @@
     isha:   { en: 'Isha', ar: 'العشاء' }
   };
   var ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
+  var WELCOMES = {
+    family: { name: "Welcome to the Raoufs'", w1: 'Welcome to', w2: "the Raoufs'", w3: 'أهلاً بكم في بيت رؤوف' },
+    home:   { name: "Raouf's Home", w1: 'Welcome', w2: "Raouf's Home", w3: 'بيت رؤوف' },
+    ahlan:  { name: 'Ahlan wa Sahlan', w1: 'Make yourself at home', w2: 'Ahlan wa Sahlan', w3: 'أهلاً وسهلاً' },
+    greet:  { name: 'Time-of-day greeting', dynamic: true },
+    off:    { name: 'Off' }
+  };
+  function greeting(now) {
+    var h = now.getHours();
+    if (h >= 4 && h < 12) return { w1: 'Good morning', w2: 'the Raoufs', w3: 'صباح الخير' };
+    if (h >= 12 && h < 17) return { w1: 'Good afternoon', w2: 'the Raoufs', w3: 'نهارك سعيد' };
+    return { w1: 'Good evening', w2: 'the Raoufs', w3: 'مساء الخير' };
+  }
+  var lastWelcome = '';
+  function drawWelcome(now) {
+    var w = WELCOMES[S.welcome] || WELCOMES.family;
+    if (w.dynamic) w = greeting(now);
+    var html = w.w2 ? '<div class="w1">' + w.w1 + '</div><div class="w2">' + w.w2 + '</div><div class="w3 ar">' + w.w3 + '</div><div class="rule"></div>' : '';
+    if (html !== lastWelcome) { $('welcome').innerHTML = html; lastWelcome = html; }
+  }
 
   var DEFAULTS = {
     city: 'shj', method: 'uae', asr: 1, h12: true, theme: 'auto', weather: true,
-    alert: true, chime: true, dim: true, shift: true,
+    alert: true, sound: 'adhan', welcome: 'family', dim: true, shift: true,
     off: { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 0, isha: 0 }
   };
   var S = load();
@@ -187,6 +213,7 @@
       var raw = window.localStorage && localStorage.getItem('tvhome');
       if (raw) { var o = JSON.parse(raw); for (var k in o) s[k] = o[k]; }
     } catch (e) {}
+    if (typeof s.chime === 'boolean') { if (!s.chime) s.sound = 'off'; delete s.chime; }
     return s;
   }
   function save() { try { localStorage.setItem('tvhome', JSON.stringify(S)); } catch (e) {} }
@@ -301,9 +328,9 @@
         $('adhanAr').textContent = 'حان الآن موعد صلاة ' + n2.ar;
         $('adhanEn').textContent = n2.en + ' · ' + fmt(hit.at) + (S.h12 ? ' ' + ampm(hit.at) : '');
         $('adhan').className = 'on';
-        if (S.chime) chime();
+        playAlert(hit.key);
       }
-    } else if ($('adhan').className === 'on' && !hit) {
+    } else if ($('adhan').className === 'on' && !hit && audio.paused) {
       $('adhan').className = '';
     }
 
@@ -314,6 +341,7 @@
 
     // dates once a minute
     if (now.getSeconds() === 0 || !$('dates').textContent) drawDates(now);
+    drawWelcome(now);
     if (S.theme === 'auto') applyTheme(now, ev);
   }
 
@@ -391,6 +419,32 @@
     } catch (e) {}
   }
 
+  /* ---------- adhan audio ----------
+     Put adhan.mp3 (and optionally adhan-fajr.mp3) in the audio/ folder.
+     Falls back to the chime if a file is missing or the TV blocks playback. */
+  var audio = $('adhanAudio');
+  var unlocked = false;
+  function unlockAudio() {
+    if (unlocked) return; unlocked = true;
+    try { audio.muted = true; audio.src = 'audio/adhan.mp3'; var p = audio.play(); if (p && p.then) p.then(function () { audio.pause(); audio.muted = false; }, function () { audio.muted = false; }); else { audio.pause(); audio.muted = false; } } catch (e) {}
+  }
+  function stopAudio() { try { audio.pause(); audio.currentTime = 0; } catch (e) {} }
+  function playAlert(key, preview) {
+    if (S.sound === 'off') return;
+    if (S.sound === 'chime') { chime(); return; }
+    var files = key === 'fajr' ? ['audio/adhan-fajr.mp3', 'audio/adhan.mp3'] : ['audio/adhan.mp3'];
+    var i = 0;
+    function tryNext() {
+      if (i >= files.length) { chime(); return; }
+      audio.onerror = function () { i++; tryNext(); };
+      audio.muted = false; audio.src = files[i];
+      try { var p = audio.play(); if (p && p.catch) p.catch(function (err) { if (err && err.name === 'NotAllowedError') chime(); }); } catch (e) { chime(); }
+    }
+    tryNext();
+    if (preview) setTimeout(stopAudio, 15000);
+  }
+  audio.onended = function () { setTimeout(function () { $('adhan').className = ''; }, 20000); };
+
   /* ---------- burn-in protection: drift a few px every minute ---------- */
   setInterval(function () {
     if (!S.shift) { $('content').style.transform = ''; return; }
@@ -408,7 +462,9 @@
     { n: 'Clock', v: function () { return S.h12 ? '12-hour' : '24-hour'; }, c: function () { S.h12 = !S.h12; } },
     { n: 'Theme', v: function () { return THEMES[S.theme].name; }, c: function (d) { S.theme = cycle(Object.keys(THEMES), S.theme, d); currentTheme = ''; if (S.theme !== 'auto') applyTheme(new Date(), null); } },
     { n: 'Adhan alert', v: function () { return onoff(S.alert); }, c: function () { S.alert = !S.alert; } },
-    { n: 'Alert chime', v: function () { return onoff(S.chime); }, c: function () { S.chime = !S.chime; if (S.chime) chime(); } },
+    { n: 'Alert sound', v: function () { return { adhan: 'Adhan', chime: 'Chime', off: 'Silent' }[S.sound]; }, c: function (d) { S.sound = cycle(['adhan', 'chime', 'off'], S.sound, d); } },
+    { n: 'Test sound', v: function () { return 'Press OK'; }, c: function () {}, ok: function () { stopAudio(); playAlert('dhuhr', true); toast('Playing 15-second preview'); } },
+    { n: 'Welcome note', v: function () { return WELCOMES[S.welcome].name; }, c: function (d) { S.welcome = cycle(Object.keys(WELCOMES), S.welcome, d); } },
     { n: 'Night dimming', v: function () { return onoff(S.dim); }, c: function () { S.dim = !S.dim; } },
     { n: 'Weather', v: function () { return onoff(S.weather); }, c: function () { S.weather = !S.weather; loadWeather(); } },
     { n: 'Screen drift', v: function () { return onoff(S.shift); }, c: function () { S.shift = !S.shift; } }
@@ -438,8 +494,9 @@
   var BACK = { 8: 1, 27: 1, 461: 1, 10009: 1, 166: 1 };
   document.addEventListener('keydown', function (e) {
     var k = e.keyCode;
+    unlockAudio();
     if ($('adhan').className === 'on' && (k === 13 || BACK[k])) {
-      dismissed[lastAdhan] = true; $('adhan').className = ''; e.preventDefault(); return;
+      dismissed[lastAdhan] = true; $('adhan').className = ''; stopAudio(); e.preventDefault(); return;
     }
     if (!settingsOpen) {
       if (k === 13 || k === 38 || k === 40) { openSettings(true); e.preventDefault(); }
